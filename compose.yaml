@@ -1,0 +1,207 @@
+services:
+  php:
+    container_name: php
+    build:
+      context: .docker
+      dockerfile: Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+        USER: ${USER:-user}
+    restart: always
+    ports:
+      - "80:80" # HTTP
+      - "443:443" # HTTPS
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./:/app
+      - caddy_data:/data
+      - caddy_config:/config
+    tty: true
+    networks:
+      - network
+
+  postgres:
+    container_name: postgres
+    image: postgres:alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - network
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_LISTEN_PORT: ${PGADMIN_PORT}
+    ports:
+      - "${PGADMIN_PORT}:${PGADMIN_PORT}"
+    volumes:
+      - .docker/postgres/pgadmin-servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgres
+    networks:
+      - network
+
+
+  mariadb:
+    container_name: mariadb
+    image: mariadb:latest
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "${MARIADB_PORT}:${MARIADB_PORT}"
+    volumes:
+      - ./data/mariadb:/var/lib/mariadb
+    environment:
+      MARIADB_HOST: ${MARIADB_HOST}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_USER: ${MARIADB_USERNAME}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+    networks:
+      - network
+
+  phpmyadmin:
+    container_name: phpmyadmin
+    image: phpmyadmin/phpmyadmin:latest
+    restart: unless-stopped
+    ports:
+      - "${PHPMYADMIN_PORT}:${PHPMYADMIN_PORT}"
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: ${MARIADB_PORT}
+      MYSQL_ROOT_PASSWORD: ${MARIADB_PASSWORD}
+      MYSQL_USER: ${MARIADB_USERNAME}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD}
+      MEMORY_LIMIT: '-1'
+      MAX_EXECUTION_TIME: 0
+      APACHE_PORT: ${PHPMYADMIN_PORT}
+      UPLOAD_LIMIT: '10G'
+    depends_on:
+      - mariadb
+    networks:
+      - network
+
+
+  sqlsrv:
+    container_name: sqlsrv
+    image: mcr.microsoft.com/mssql/server:${SQLSRV_VERSION}-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: ${MSSQL_PID}
+      MSSQL_SA_PASSWORD: ${SQLSRV_PASSWORD}
+      MSSQL_COLLATION: ${MSSQL_COLLATION}
+      MSSQL_TCP_PORT: ${SQLSRV_PORT}
+    ports:
+      - "${SQLSRV_PORT}:${SQLSRV_PORT}"
+    volumes:
+      - ./data/sqlsrv:/var/opt/mssql/data
+    networks:
+      - network
+
+
+  mongodb:
+    container_name: mongodb
+    image: mongo:latest
+    restart: unless-stopped
+    hostname: mongodb
+    tty: true
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE}
+    ports:
+      - "${MONGODB_PORT}:${MONGODB_PORT}"
+    volumes:
+      - ./data/mongodb:/data/mongodb
+    networks:
+      - network
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    restart: unless-stopped
+    ports:
+      - "${MONGO_EXPRESS_PORT}:${MONGO_EXPRESS_PORT}"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD}
+      ME_CONFIG_MONGODB_PORT: ${MONGODB_PORT}
+      ME_CONFIG_MONGODB_SERVER: 'mongodb'
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD}
+      #ME_CONFIG_BASICAUTH: false
+    depends_on:
+      - mongodb
+    networks:
+      - network
+
+
+  cassandra:
+    container_name: cassandra
+    image: cassandra:latest
+    restart: unless-stopped
+    environment:
+      - CASSANDRA_USER=${CASSANDRA_USERNAME}
+      - CASSANDRA_PASSWORD=${CASSANDRA_PASSWORD}
+    ports:
+      - "${CASSANDRA_PORT}:${CASSANDRA_PORT}"
+    tty: true
+    volumes:
+      - ./data/cassandra:/var/lib/cassandra
+    networks:
+      - network
+
+
+  redis:
+    container_name: redis
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - ./data/redis:/data/redis
+    networks:
+      - network
+
+  valkey:
+    container_name: valkey
+    image: valkey/valkey:alpine
+    restart: unless-stopped
+    ports:
+      - "${VALKEY_PORT}:${VALKEY_PORT}"
+    volumes:
+      - ./data/valkey:/data/valkey
+    networks:
+      - network
+
+  keydb:
+    container_name: keydb
+    image: eqalpha/keydb:alpine
+    restart: unless-stopped
+    ports:
+      - "${KEYDB_PORT}:${KEYDB_PORT}"
+    volumes:
+      - ./data/keydb:/data/keydb
+    networks:
+      - network
+
+
+networks:
+  network:
+
+volumes:
+  caddy_data:
+  caddy_config:
